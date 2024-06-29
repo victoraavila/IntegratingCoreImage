@@ -5,6 +5,8 @@
 //  Created by Víctor Ávila on 28/06/24.
 //
 
+import CoreImage
+import CoreImage.CIFilterBuiltins // Helpers to make loading easier
 import SwiftUI
 
 // CoreImage is an Apple framework for editing existing images (not drawing): sharpening, blurs, vignettes, pixelation, etc.
@@ -43,7 +45,68 @@ struct ContentView: View {
     }
     
     func loadImage() {
-        image = Image(.example)
+//        image = Image(.example)
+        
+        // Creating an UIImage from our example image and manipulating it using CoreImage
+        // 1. Load our image into an UIImage with the initializer, which will return a value
+        // 2. Convert the value into CIImage, which is what CoreImage wants to work with
+        let inputImage = UIImage(resource: .example)
+        let beginImage = CIImage(image: inputImage)
+        
+        // Creating a CoreImageContext and a CoreImageFilter
+        // Filters are things that transform image data somehow, such as blurring it, sharpening it or changing the color somehow
+        // Context handle all that information and converts it into a processed CGImage we can work with (it runs a recipe)
+        // Both of these data types come from CoreImage
+        // We will add a Sepia tone filter
+        let context = CIContext()
+//        let currentFilter = CIFilter.sepiaTone() // Load that filter ready to use
+//        let currentFilter = CIFilter.pixellate()
+//        let currentFilter = CIFilter.crystallize()
+        let currentFilter = CIFilter.twirlDistortion()
+        
+        // We can customize the way the filter works
+        // Sepia has only two properties we care about: one is the input image (the image we want to change in our recipe) and the other is intensity (how strong the Sepia should be applied, from 0 to 1)
+        currentFilter.inputImage = beginImage
+//        currentFilter.intensity = 1 // Maximum strength Sepia effect
+        
+        // Convert the output of the filter into a SwiftUI Image we can display in our View
+        // The easiest thing to do is to read the output image from our filter (a CIImage? which could fail);
+        // Ask our context to convert the output image (a CIImage?) into a CGImage? (also could fail);
+        // Convert the CGImage? into an UIImage;
+        // Convert the UIImage into a SwiftUI Image.
+        
+        // CoreImage is a little bit "creative". It was introduced 12 years ago. Its API was the least Swifty thing for a long time.
+        // For instance, pixellating has to be done by setting a scale, not an intensity:
+//        currentFilter.scale = 100
+        // And crystallizing has to be done by setting a radius, not a scale:
+//        currentFilter.radius = 300
+        // twirlDistortion, however, can be set by a radius:
+//        currentFilter.radius = 1000
+//        currentFilter.center = CGPoint(x: inputImage.size.width/2, y: inputImage.size.height/2)
+        
+        // However, for this project we're going to use the older API because it lets us set values dynamically
+        // We can ask the filter what it supports and then send the value on
+        let amount = 1.0 // Some unknown number
+        let inputKeys = currentFilter.inputKeys // Read the things it actually supports
+        if inputKeys.contains(kCIInputIntensityKey) { // If this is a filter that supports intensity
+            currentFilter.setValue(amount, forKey: kCIInputIntensityKey)
+        }
+        if inputKeys.contains(kCIInputRadiusKey) { // If this is a filter that supports radius
+            currentFilter.setValue(amount * 200, forKey: kCIInputRadiusKey)
+        }
+        if inputKeys.contains(kCIInputScaleKey) { // If this is a filter that supports scale
+            currentFilter.setValue(amount * 10, forKey: kCIInputScaleKey)
+        }
+        // These kCI*** are just magic strings behind the scenes.
+        // If you're implementing precise CoreImage adjustments, please use the new API with exact property names and types.
+        // In this particular project we will switch between many different kinds of filters very quickly, so that's why we will use the old API.
+        
+        // You can go directly from a CGImage to a SwiftUI Image (skiping one step), but it requires extra parameters which add more complexities
+        guard let outputImage = currentFilter.outputImage else { return }
+        guard let cgImage = context.createCGImage(outputImage, from: outputImage.extent) else { return } // Use the whole information of the outputImage
+        let uiImage = UIImage(cgImage: cgImage)
+        image = Image(uiImage: uiImage)
+        
     }
 }
 
